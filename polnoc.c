@@ -79,7 +79,7 @@ typedef struct RPNI_Lexer {
     int row;
     int cursor;
     const char *content_path;
-    const char *content;
+    char *content;
     size_t content_len;
 } RPNI_Lexer;
 
@@ -329,9 +329,17 @@ bool rpni_tokenize_raw_list(const RPNI_Lexer *l, const RPNI_RawList *list, RPNI_
             fprintf(stderr, "%s:%d:%d:ERROR Unrecognized Token: %s\n", l->content_path, string->row, string->col, string->c_str);
             return false;
         }
-        // free(list->items[i].c_str);
     }
 
+    return true;
+}
+
+bool rpni_free_raw_list(RPNI_RawList *list)
+{
+    if (!list) return false;
+    for (size_t i = 0; i < list->count; ++i) {
+        free(list->items[i].c_str);
+    }
     return true;
 }
 
@@ -463,12 +471,14 @@ int main(int argc, char **argv)
     RPNI_Lexer lexer = {0};
     rpni_init_cursor(&lexer, source);
     if (!rpni_tokenize_source_string(&lexer, &list)) {
+        free(lexer.content);
         return 1;
     }
 
 #if RPNI_TRACE
     if (!rpni_dump_raw_list(&list)) {
         // Clean up
+        free(lexer.content);
         free(list.items);
         return 1;
     }
@@ -477,6 +487,7 @@ int main(int argc, char **argv)
     RPNI_Tokens tokens = {0};
     if (!rpni_tokenize_raw_list(&lexer, &list, &tokens)) {
         // Clean up
+        free(lexer.content);
         free(list.items);
         return 1;
     }
@@ -494,6 +505,7 @@ int main(int argc, char **argv)
     // Reverse Polish Notation Algorithm
     if (!rpni_eval_exprs(&lexer, &tokens, &stack)) {
         // Clean up
+        free(lexer.content);
         free(stack.items);
         free(list.items);
         free(tokens.items);
@@ -503,6 +515,7 @@ int main(int argc, char **argv)
 #if RPNI_TRACE
     if (!rpni_dump_tokens((RPNI_Tokens*)&stack)) {
         // Clean up
+        free(lexer.content);
         free(stack.items);
         free(list.items);
         free(tokens.items);
@@ -511,7 +524,9 @@ int main(int argc, char **argv)
 #endif
 
     // Clean up
+    free(lexer.content);
     free(stack.items);
+    if (!rpni_free_raw_list(&list)) return 1;
     free(list.items);
     free(tokens.items);
     return 0;
