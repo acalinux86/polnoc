@@ -7,6 +7,7 @@
 
 #define RPNI_INIT_CAP 5
 #define RPNI_TRACE 0
+#define RPNI_MAX_LINE 1000
 
 char *rpni_read_file_into_memory(const char *rpni_file_path, size_t *rpni_file_size)
 {
@@ -218,6 +219,12 @@ bool rpni_tokenize_source_string(RPNI_Lexer *l, RPNI_RawList *list)
         n++;
         l->cursor++;
     }
+
+    // Any Remaining Content
+    if (cursor > 0) {
+        rpni_array_push(list, ((RPNI_String){rpni_strdup(buf, cursor), cursor, l->row, l->cursor - cursor}));
+    }
+
     return true;
 }
 
@@ -334,15 +341,6 @@ bool rpni_tokenize_raw_list(const RPNI_Lexer *l, const RPNI_RawList *list, RPNI_
     return true;
 }
 
-bool rpni_free_raw_list(RPNI_RawList *list)
-{
-    if (!list) return false;
-    for (size_t i = 0; i < list->count; ++i) {
-        free(list->items[i].c_str);
-    }
-    return true;
-}
-
 bool rpni_dump_tokens(const RPNI_Tokens *tokens);
 
 bool rpni_eval_exprs(const RPNI_Lexer *l, const RPNI_Tokens *tokens, RPNI_Stack *stack)
@@ -447,87 +445,167 @@ bool rpni_dump_tokens(const RPNI_Tokens *tokens)
     return true;
 }
 
-void rpni_init_cursor(RPNI_Lexer *lexer, const char *path)
+void rpni_init_lexer(RPNI_Lexer *lexer, const char *file_name, char *source, size_t size)
 {
     lexer->row = 1;
     lexer->col = 1;
     lexer->cursor = 1;
-    lexer->content_path = path;
-    lexer->content = rpni_read_file_into_memory(lexer->content_path, &lexer->content_len);
+    lexer->content_path = file_name;
+    lexer->content_len = size;
+    lexer->content = source;
     if (lexer->content == NULL) return ;
+}
+
+bool rpni_free_raw_list(RPNI_RawList *list)
+{
+    if (!list) return false;
+    for (size_t i = 0; i < list->count; ++i) {
+        if (list->items[i].c_str) free(list->items[i].c_str);
+    }
+    if (list->items) free(list->items);
+    return true;
+}
+
+bool rpni_free_tokens(RPNI_Tokens *tokens)
+{
+    if (!tokens) return false;
+    if (tokens->items) free(tokens->items);
+    return true;
+}
+
+bool rpni_free_resources(RPNI_Stack *stack, RPNI_RawList *list, RPNI_Tokens *tokens, RPNI_Lexer *lexer)
+{
+    if (lexer && lexer->content) free(lexer->content);
+    if (!rpni_free_raw_list(list)) return false;
+    if(!rpni_free_tokens(tokens)) return false;
+    if(!rpni_free_tokens((RPNI_Tokens*)stack)) return false;
+    return true;
+}
+
+int rpni_get_line(char line[])
+{
+    int i;
+    char c;
+    for (i = 0; ((c = getchar()) != EOF && c != '\n'); ++i) {
+        line[i] = c;
+    }
+    line[i] = '\0';
+    return i;
+}
+
+void rpni_usage(const char *program)
+{
+    fprintf(stderr, "[USAGE] %s <arg> [input_file]\n", program);
+    fprintf(stderr, "[USAGE] arg: \n");
+    fprintf(stderr, "[USAGE]     --input, -i <input_file> Pass the Input Source File\n");
+    fprintf(stderr, "[USAGE]     --interactive, -s        Repl-Style Interative Program\n");
 }
 
 int main(int argc, char **argv)
 {
     const char *program = rpni_shift_args(&argc, &argv);
     if (argc < 1) {
-        fprintf(stderr, "[USAGE] %s <input_file>\n", program);
+        rpni_usage(program);
         return 1;
     }
 
-    const char *source = rpni_shift_args(&argc, &argv);
+    const char *flag = rpni_shift_args(&argc, &argv);
+    if (strcmp(flag, "--input") == 0 || strcmp(flag, "-i") == 0) {
+        if (argc < 1) {
+            rpni_usage(program);
+            fprintf(stderr, "\n[ERROR] No Input File Provided\n");
+            return 1;
+        }
+        const char *source = rpni_shift_args(&argc, &argv);
 
-    RPNI_RawList list = {0};
-    RPNI_Lexer lexer = {0};
-    rpni_init_cursor(&lexer, source);
-    if (!rpni_tokenize_source_string(&lexer, &list)) {
-        free(lexer.content);
-        return 1;
-    }
+        RPNI_RawList list  = {0};
+        RPNI_Lexer lexer   = {0};
+        RPNI_Tokens tokens = {0};
+        RPNI_Stack stack   = {0};
+
+        size_t size = 0;
+        char *code = rpni_read_file_into_memory(source, &size);
+        rpni_init_lexer(&lexer, source, code, size);
+        if (!rpni_tokenize_source_string(&lexer, &list)) {
+            rpni_free_resources(&stack, &list, &tokens, &lexer);
+            return 1;
+        }
 
 #if RPNI_TRACE
-    if (!rpni_dump_raw_list(&list)) {
-        // Clean up
-        free(lexer.content);
-        free(list.items);
-        return 1;
-    }
+        if (!rpni_dump_raw_list(&list)) {
+            // Clean up
+            rpni_free_resources(&stack, &list, &tokens, &lexer);
+            return 1;
+        }
 #endif
 
-    RPNI_Tokens tokens = {0};
-    if (!rpni_tokenize_raw_list(&lexer, &list, &tokens)) {
-        // Clean up
-        free(lexer.content);
-        free(list.items);
-        return 1;
-    }
+        if (!rpni_tokenize_raw_list(&lexer, &list, &tokens)) {
+            // Clean up
+            rpni_free_resources(&stack, &list, &tokens, &lexer);
+            return 1;
+        }
 
 #if RPNI_TRACE
-    if (!rpni_dump_tokens(&tokens)) {
-        // Clean up
-        free(list.items);
-        free(tokens.items);
-        return 1;
-    }
+        if (!rpni_dump_tokens(&tokens)) {
+            // Clean up
+            rpni_free_resources(&stack, &list, &tokens, &lexer);
+            return 1;
+        }
 #endif
-
-    RPNI_Stack stack = {0};
-    // Reverse Polish Notation Algorithm
-    if (!rpni_eval_exprs(&lexer, &tokens, &stack)) {
-        // Clean up
-        free(lexer.content);
-        free(stack.items);
-        free(list.items);
-        free(tokens.items);
-        return 1;
-    }
+        // Reverse Polish Notation Algorithm
+        if (!rpni_eval_exprs(&lexer, &tokens, &stack)) {
+            // Clean up
+            rpni_free_resources(&stack, &list, &tokens, &lexer);
+            return 1;
+        }
 
 #if RPNI_TRACE
-    if (!rpni_dump_tokens((RPNI_Tokens*)&stack)) {
-        // Clean up
-        free(lexer.content);
-        free(stack.items);
-        free(list.items);
-        free(tokens.items);
+        if (!rpni_dump_tokens((RPNI_Tokens*)&stack)) {
+            // Clean up
+            rpni_free_resources(&stack, &list, &tokens, &lexer);
+            return 1;
+        }
+#endif
+        rpni_free_resources(&stack, &list, &tokens, &lexer);
+
+    } else if (strcmp(flag, "--interactive") == 0 || strcmp(flag, "-s") == 0) {
+        char line[RPNI_MAX_LINE];
+        int len;
+
+        printf("repl> ");
+        fflush(stdout);
+        while ((len = rpni_get_line(line)) > 0) {
+            RPNI_RawList list  = {0};
+            RPNI_Lexer lexer   = {0};
+            RPNI_Tokens tokens = {0};
+            RPNI_Stack stack   = {0};
+
+            rpni_init_lexer(&lexer, NULL, rpni_strdup(line, len), len);
+            if (!rpni_tokenize_source_string(&lexer, &list)) {
+                rpni_free_resources(&stack, &list, &tokens, &lexer);
+                return 1;
+            }
+
+            if (!rpni_tokenize_raw_list(&lexer, &list, &tokens)) {
+                // Clean up
+                rpni_free_resources(&stack, &list, &tokens, &lexer);
+                return 1;
+            }
+
+            if (!rpni_eval_exprs(&lexer, &tokens, &stack)) {
+                // Clean up
+                rpni_free_resources(&stack, &list, &tokens, &lexer);
+                return 1;
+            }
+
+            printf("repl> ");
+            rpni_free_resources(&stack, &list, &tokens, &lexer);
+        }
+
+    } else {
+        rpni_usage(program);
+        fprintf(stderr, "\n[ERROR] Unknown flag `%s`\n", flag);
         return 1;
     }
-#endif
-
-    // Clean up
-    free(lexer.content);
-    free(stack.items);
-    if (!rpni_free_raw_list(&list)) return 1;
-    free(list.items);
-    free(tokens.items);
     return 0;
 }
