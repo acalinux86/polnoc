@@ -1,7 +1,6 @@
 CC=gcc
 CFLAGS=			\
 	-Wall		\
-	-Werror		\
 	-Wextra		\
 	-pedantic	\
 	-std=c99	\
@@ -10,9 +9,9 @@ CFLAGS=			\
 
 LIBS= -lm
 
-build/polnoc: polnoc.c
+build/polnoc: src/polnoc.c src/polnoc_lexer.c
 	mkdir -p build
-	$(CC) $(CFLAGS) -o $@ $< $(LIBS)
+	$(CC) $(CFLAGS) -o $@ $^ $(LIBS)
 
 clean:
 	rm -rf build
