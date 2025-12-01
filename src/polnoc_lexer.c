@@ -1,15 +1,5 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <errno.h>
-#include <string.h>
-#include <stdbool.h>
-#include <ctype.h>
-
 #include "./polnoc_lexer.h"
-// #include "./polnoc_parser.h"
-#include "./dyn_array.h"
-
-#define PLC_MAX_BUF_LEN 256
+#include "./polnoc_parser.h"
 
 const char *plc_token_type_as_cstr(const Plc_TokenType type)
 {

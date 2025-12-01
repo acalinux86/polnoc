@@ -3,7 +3,12 @@
 
 #include "./dyn_array.h"
 
-#define PLC_MAX_BUF_LEN 256
+#include <stdio.h>
+#include <stdlib.h>
+#include <errno.h>
+#include <string.h>
+#include <stdbool.h>
+#include <ctype.h>
 
 typedef enum {
     PLC_TOKEN_NUMBER,

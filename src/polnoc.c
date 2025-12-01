@@ -6,8 +6,9 @@
 #include <ctype.h>
 
 #include "./polnoc_lexer.h"
+#include "./polnoc_parser.h"
 
-char *rpni_read_file_into_memory(const char *rpni_file_path, size_t *rpni_file_size)
+char *plc_read_file_into_memory(const char *rpni_file_path, size_t *rpni_file_size)
 {
     FILE *fp = fopen(rpni_file_path, "rb");
     if (fp == NULL) {
@@ -52,7 +53,7 @@ char *rpni_read_file_into_memory(const char *rpni_file_path, size_t *rpni_file_s
     return buffer;
 }
 
-const char *rpni_shift_args(int *argc, char ***argv)
+const char *plc_shift_args(int *argc, char ***argv)
 {
     const char *result = **argv;
     (*argc)--;
@@ -107,20 +108,36 @@ bool plc_free_tokens(Plc_Tokens *tokens)
     return true;
 }
 
-int main(void)
+int main(int argc, char **argv)
 {
-    const char *code = "1 2 + print\n2 3 - print\n2.3 4.6 / print\n4.567 5.905 * print\ndup";
-    printf("code => %s\n", code);
-    size_t code_len  = strlen(code);
+    const char *program = plc_shift_args(&argc, &argv);
+    if (argc <= 0) {
+        fprintf(stderr, "USAGE: %s <input_file>\n", program);
+        return 1;
+    }
+
+    const char *file_path = plc_shift_args(&argc, &argv);
+    size_t code_len = 0;
+    char *code = plc_read_file_into_memory(file_path, &code_len);
     Plc_Lexer lexer = plc_lexer_init(code, code_len);
 
     Plc_Tokens tokens = {0};
+    Plc_Tokens stack = {0};
     if (!plc_lexer_tokenize(&lexer, &tokens)) {
+        free(code);
         if (!plc_free_tokens(&tokens)) return 1;
         return 1;
     }
 
-    if (!plc_dump_tokens(&tokens)) return 1;
+    if (!plc_parse_tokens(&tokens, &stack)) {
+        free(code);
+        if (!plc_free_tokens(&tokens)) return 1;
+        if (!plc_free_tokens(&stack)) return 1;
+        return 1;
+    }
+
+    free(code);
     if (!plc_free_tokens(&tokens)) return 1;
+    if (!plc_free_tokens(&stack)) return 1;
     return 0;
 }
