@@ -5,11 +5,11 @@ const char *plc_token_type_as_cstr(const Plc_TokenType type)
 {
     switch (type) {
     case PLC_TOKEN_NUMBER: return "PLC_TOKEN_NUMBER";
+    case PLC_TOKEN_STRING: return "PLC_TOKEN_STRING";
     case PLC_TOKEN_PLUS:   return "PLC_TOKEN_PLUS";
     case PLC_TOKEN_MINUS:  return "PLC_TOKEN_MINUS";
     case PLC_TOKEN_DIV:    return "PLC_TOKEN_DIV";
     case PLC_TOKEN_MULT:   return "PLC_TOKEN_MULT";
-    case PLC_TOKEN_FUNC:   return "PLC_TOKEN_FUNC";
     default:
         fprintf(stderr, "[PANIC] Unreachable TOKEN TYPE\n");
         return NULL;
@@ -30,9 +30,9 @@ Plc_Lexer plc_lexer_init(const char *source, size_t size)
     return lexer;
 }
 
-char plc_lexer_peek(const Plc_Lexer *lexer)
+char plc_lexer_peek(const Plc_Lexer *lexer, size_t ahead)
 {
-    return lexer->content[lexer->cursor];
+    return lexer->content[lexer->cursor + ahead];
 }
 
 char plc_lexer_advance(Plc_Lexer *lexer)
@@ -53,19 +53,19 @@ bool plc_lexer_tokenize(Plc_Lexer *l, Plc_Tokens *tokens)
     char c;
     while (!plc_lexer_end(l)) {
         Plc_Token token = {0};
-        c = plc_lexer_peek(l);
+        c = plc_lexer_peek(l,0);
         if (isalpha(c)) {
             dyn_array_append(&token.data.string, c);
             plc_lexer_advance(l);
 
-            while (!isspace(plc_lexer_peek(l)) && plc_lexer_peek(l) != '\0') {
-                c = plc_lexer_peek(l);
+            while (!isspace(plc_lexer_peek(l, 0)) && plc_lexer_peek(l, 0) != '\0') {
+                c = plc_lexer_peek(l,0);
                 dyn_array_append(&token.data.string, c);
                 plc_lexer_advance(l);
             }
             dyn_array_append(&token.data.string, '\0');
 
-            token.type = PLC_TOKEN_FUNC;
+            token.type = PLC_TOKEN_STRING;
             dyn_array_append(tokens, token);
         } else if (isspace(c)) {
             plc_lexer_advance(l);
@@ -74,23 +74,19 @@ bool plc_lexer_tokenize(Plc_Lexer *l, Plc_Tokens *tokens)
             if (plc_is_opcode(c)) {
                 plc_lexer_advance(l);
                 if (c == '+') {
-                    dyn_array_append(&token.data.string, c);
-                    dyn_array_append(&token.data.string, '\0');
+                    token.data.character = c;
                     token.type = PLC_TOKEN_PLUS;
                     dyn_array_append(tokens, token);
                 } else if (c == '-') {
-                    dyn_array_append(&token.data.string, c);
-                    dyn_array_append(&token.data.string, '\0');
+                    token.data.character = c;
                     token.type = PLC_TOKEN_MINUS;
                     dyn_array_append(tokens, token);
                 } else if (c == '*') {
-                    dyn_array_append(&token.data.string, c);
-                    dyn_array_append(&token.data.string, '\0');
+                    token.data.character = c;
                     token.type = PLC_TOKEN_MULT;
                     dyn_array_append(tokens, token);
                 } else if (c == '/') {
-                    dyn_array_append(&token.data.string, c);
-                    dyn_array_append(&token.data.string, '\0');
+                    token.data.character = c;
                     token.type = PLC_TOKEN_DIV;
                     dyn_array_append(tokens, token);
                 } else {
@@ -102,8 +98,8 @@ bool plc_lexer_tokenize(Plc_Lexer *l, Plc_Tokens *tokens)
                 dyn_array_append(&token.data.string, c);
                 plc_lexer_advance(l);
 
-                while (isdigit(plc_lexer_peek(l)) || plc_lexer_peek(l) == '.') {
-                    c = plc_lexer_peek(l);
+                while (isdigit(plc_lexer_peek(l,0)) || plc_lexer_peek(l, 0) == '.') {
+                    c = plc_lexer_peek(l,0);
                     dyn_array_append(&token.data.string, c);
                     plc_lexer_advance(l);
                 }

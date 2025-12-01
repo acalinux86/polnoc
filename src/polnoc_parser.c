@@ -90,7 +90,7 @@ bool plc_parse_tokens(const Plc_Tokens *tokens, Plc_Tokens *stack)
             dyn_array_append(stack, t);
         } break;
 
-        case PLC_TOKEN_FUNC: {
+        case PLC_TOKEN_STRING: {
             if (plc_cmp(&token->data.string, "print")) {
                 Plc_Token *top = &stack->contents[0];
                 fprintf(stdout, "INFO: Value: %lf, Type: %s\n", top->data.number, plc_token_type_as_cstr(top->type));

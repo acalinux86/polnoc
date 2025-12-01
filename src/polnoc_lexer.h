@@ -16,7 +16,7 @@ typedef enum {
     PLC_TOKEN_MINUS,
     PLC_TOKEN_DIV,
     PLC_TOKEN_MULT,
-    PLC_TOKEN_FUNC,
+    PLC_TOKEN_STRING
 } Plc_TokenType;
 
 typedef struct {
@@ -28,6 +28,7 @@ typedef struct {
 typedef union {
     Plc_String string;
     double number;
+    char character;
 } Plc_TokenData;
 
 typedef struct {
@@ -49,7 +50,7 @@ typedef struct {
 
 const char *plc_token_type_as_cstr(Plc_TokenType type);
 Plc_Lexer plc_lexer_init(const char *source, size_t size);
-char plc_lexer_peek(const Plc_Lexer *lexer);
+char plc_lexer_peek(const Plc_Lexer *lexer, size_t ahead);
 char plc_lexer_advance(Plc_Lexer *lexer);
 bool plc_lexer_end(const Plc_Lexer *lexer);
 bool plc_lexer_tokenize(Plc_Lexer *l, Plc_Tokens *tokens);

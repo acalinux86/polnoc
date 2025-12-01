@@ -71,7 +71,7 @@ bool plc_dump_tokens(const Plc_Tokens *tokens)
             printf("[INFO] Type: %s, Token: %lf\n", plc_token_type_as_cstr(token.type), token.data.number);
         } break;
 
-        case PLC_TOKEN_FUNC:
+        case PLC_TOKEN_STRING:
         case PLC_TOKEN_DIV:
         case PLC_TOKEN_MULT:
         case PLC_TOKEN_MINUS:
@@ -92,13 +92,13 @@ bool plc_free_tokens(Plc_Tokens *tokens)
     for (size_t i = 0; i < tokens->count; ++i) {
         Plc_Token *token = &tokens->contents[i];
         switch (token->type) {
+        case PLC_TOKEN_STRING:
+            dyn_array_delete(&token->data.string);
+            break;
         case PLC_TOKEN_DIV:
         case PLC_TOKEN_MINUS:
         case PLC_TOKEN_PLUS:
         case PLC_TOKEN_MULT:
-        case PLC_TOKEN_FUNC:
-            dyn_array_delete(&token->data.string);
-            break;
         case PLC_TOKEN_NUMBER:
         default:
             break;
