@@ -60,7 +60,7 @@
             (dyn_array)->contents =                                     \
                 realloc(                                                \
                     (dyn_array)->contents,                              \
-                    sizeof((dyn_array)->contents)*((dyn_array)->capacity)); \
+                    sizeof(*(dyn_array)->contents)*((dyn_array)->capacity)); \
             /* Check if The Reallocation pointer is not NULL */         \
             if ((dyn_array)->contents == NULL ) {                       \
                 fprintf(stderr, "ERROR: Memory Reallocation For Dynamic Array Failed."); \
