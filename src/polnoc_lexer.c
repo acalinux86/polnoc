@@ -1,6 +1,51 @@
 #include "./polnoc_lexer.h"
 #include "./polnoc_parser.h"
 
+// Private Functions
+static inline bool _plc_is_opcode(char x)
+{
+    return x == '+' || x == '*' || x == '/' || x == '-';
+}
+
+static inline char _plc_lexer_peek(const Plc_Lexer *lexer, size_t ahead)
+{
+    return lexer->content[lexer->cursor + ahead];
+}
+
+static inline char _plc_lexer_advance(Plc_Lexer *lexer)
+{
+    return lexer->content[lexer->cursor++];
+}
+
+static inline bool _plc_lexer_end(const Plc_Lexer *lexer)
+{
+    return lexer->cursor == lexer->content_len;
+}
+
+static inline Plc_Token _plc_create_token_binop(Plc_TokenType type, char binop)
+{
+    Plc_Token token  = {0};
+    token.type       = type;
+    token.data.binop = binop;
+    return token;
+}
+
+static inline Plc_Token _plc_create_token_number(Plc_TokenType type, double number)
+{
+    Plc_Token token   = {0};
+    token.type        = type;
+    token.data.number = number;
+    return token;
+}
+
+static bool _plc_add_token(Plc_Tokens *tokens, Plc_Token token)
+{
+    if (!tokens) return false;
+    dyn_array_append(tokens, token);
+    return true;
+}
+
+// Public Functions
 const char *plc_token_type_as_cstr(const Plc_TokenType type)
 {
     switch (type) {
@@ -16,11 +61,6 @@ const char *plc_token_type_as_cstr(const Plc_TokenType type)
     }
 }
 
-static inline bool plc_is_opcode(char x)
-{
-    return x == '+' || x == '*' || x == '/' || x == '-';
-}
-
 Plc_Lexer plc_lexer_init(const char *source, size_t size)
 {
     Plc_Lexer lexer   = {0};
@@ -30,65 +70,46 @@ Plc_Lexer plc_lexer_init(const char *source, size_t size)
     return lexer;
 }
 
-char plc_lexer_peek(const Plc_Lexer *lexer, size_t ahead)
-{
-    return lexer->content[lexer->cursor + ahead];
-}
-
-char plc_lexer_advance(Plc_Lexer *lexer)
-{
-    return lexer->content[lexer->cursor++];
-}
-
-bool plc_lexer_end(const Plc_Lexer *lexer)
-{
-    return lexer->cursor == lexer->content_len;
-}
-
 bool plc_lexer_tokenize(Plc_Lexer *l, Plc_Tokens *tokens)
 {
     if (!tokens)     return false;
     if (!l->content) return false;
 
     char c;
-    while (!plc_lexer_end(l)) {
+    while (!_plc_lexer_end(l)) {
         Plc_Token token = {0};
-        c = plc_lexer_peek(l,0);
+        c = _plc_lexer_peek(l,0);
         if (isalpha(c)) {
             dyn_array_append(&token.data.string, c);
-            plc_lexer_advance(l);
+            _plc_lexer_advance(l);
 
-            while (!isspace(plc_lexer_peek(l, 0)) && plc_lexer_peek(l, 0) != '\0') {
-                c = plc_lexer_peek(l,0);
+            while (!isspace(_plc_lexer_peek(l, 0)) && _plc_lexer_peek(l, 0) != '\0') {
+                c = _plc_lexer_peek(l,0);
                 dyn_array_append(&token.data.string, c);
-                plc_lexer_advance(l);
+                _plc_lexer_advance(l);
             }
             dyn_array_append(&token.data.string, '\0');
 
             token.type = PLC_TOKEN_STRING;
             dyn_array_append(tokens, token);
         } else if (isspace(c)) {
-            plc_lexer_advance(l);
+            _plc_lexer_advance(l);
             dyn_array_delete(&token.data.string);
         } else {
-            if (plc_is_opcode(c)) {
-                plc_lexer_advance(l);
+            if (_plc_is_opcode(c)) {
+                _plc_lexer_advance(l);
                 if (c == '+') {
-                    token.data.character = c;
-                    token.type = PLC_TOKEN_PLUS;
-                    dyn_array_append(tokens, token);
+                    Plc_Token token = _plc_create_token_binop(PLC_TOKEN_PLUS, '+'); // '+'
+                    if (!_plc_add_token(tokens, token)) return false; // Append token plus
                 } else if (c == '-') {
-                    token.data.character = c;
-                    token.type = PLC_TOKEN_MINUS;
-                    dyn_array_append(tokens, token);
+                    Plc_Token token = _plc_create_token_binop(PLC_TOKEN_MINUS, '-'); // '-'
+                    if (!_plc_add_token(tokens, token)) return false; // Append token minus
                 } else if (c == '*') {
-                    token.data.character = c;
-                    token.type = PLC_TOKEN_MULT;
-                    dyn_array_append(tokens, token);
+                    Plc_Token token = _plc_create_token_binop(PLC_TOKEN_MULT, '-'); // '*'
+                    if (!_plc_add_token(tokens, token)) return false; // Append token mult
                 } else if (c == '/') {
-                    token.data.character = c;
-                    token.type = PLC_TOKEN_DIV;
-                    dyn_array_append(tokens, token);
+                    Plc_Token token = _plc_create_token_binop(PLC_TOKEN_DIV, '/'); // '/'
+                    if (!_plc_add_token(tokens, token)) return false; // Append token division
                 } else {
                     // Unknown Opcode
                     return false;
@@ -96,12 +117,12 @@ bool plc_lexer_tokenize(Plc_Lexer *l, Plc_Tokens *tokens)
             } else if (isdigit(c)) {
                 // Consume Rest of Number
                 dyn_array_append(&token.data.string, c);
-                plc_lexer_advance(l);
+                _plc_lexer_advance(l);
 
-                while (isdigit(plc_lexer_peek(l,0)) || plc_lexer_peek(l, 0) == '.') {
-                    c = plc_lexer_peek(l,0);
+                while (isdigit(_plc_lexer_peek(l,0)) || _plc_lexer_peek(l, 0) == '.') {
+                    c = _plc_lexer_peek(l,0);
                     dyn_array_append(&token.data.string, c);
-                    plc_lexer_advance(l);
+                    _plc_lexer_advance(l);
                 }
                 dyn_array_append(&token.data.string, '\0');
 
@@ -109,9 +130,8 @@ bool plc_lexer_tokenize(Plc_Lexer *l, Plc_Tokens *tokens)
                 double number = plc_parse_number(str_num);
                 dyn_array_delete(&token.data.string);
 
-                token.type = PLC_TOKEN_NUMBER;
-                token.data.number = number;
-                dyn_array_append(tokens, token);
+                Plc_Token t = _plc_create_token_number(PLC_TOKEN_NUMBER, number);
+                if (!_plc_add_token(tokens, t)) return false; // Append token Number
             }
         }
     }
