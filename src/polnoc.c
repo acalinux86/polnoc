@@ -8,24 +8,24 @@
 #include "./polnoc_lexer.h"
 #include "./polnoc_parser.h"
 
-char *plc_read_file_into_memory(const char *rpni_file_path, size_t *rpni_file_size)
+char *plc_read_file_into_memory(const char *plc_file_path, size_t *plc_file_size)
 {
-    FILE *fp = fopen(rpni_file_path, "rb");
+    FILE *fp = fopen(plc_file_path, "rb");
     if (fp == NULL) {
-        fprintf(stderr, "[ERROR] Could not read `%s`: `%s`\n", rpni_file_path, strerror(errno));
+        fprintf(stderr, "[ERROR] Could not read `%s`: `%s`\n", plc_file_path, strerror(errno));
         return NULL;
     }
 
     int ret = fseek(fp, 0, SEEK_END);
     if (ret < 0) {
-        fprintf(stderr, "[ERROR] Could not seek to end of `%s`: `%s`\n", rpni_file_path, strerror(errno));
+        fprintf(stderr, "[ERROR] Could not seek to end of `%s`: `%s`\n", plc_file_path, strerror(errno));
         fclose(fp);
         return NULL;
     }
 
     size_t size = ftell(fp);
     if (size <= 0) {
-        fprintf(stderr, "[ERROR] File `%s` Empty\n", rpni_file_path);
+        fprintf(stderr, "[ERROR] File `%s` Empty\n", plc_file_path);
         fclose(fp);
         return NULL;
     }
@@ -48,7 +48,7 @@ char *plc_read_file_into_memory(const char *rpni_file_path, size_t *rpni_file_si
     }
     buffer[bytes] = '\0'; // Null Terminate
 
-    *rpni_file_size = size;
+    *plc_file_size = size;
     fclose(fp); // close file pointer
     return buffer;
 }
@@ -68,7 +68,7 @@ bool plc_dump_tokens(const Plc_Tokens *tokens)
         Plc_Token token = tokens->contents[i];
         switch (token.type) {
         case PLC_TOKEN_NUMBER: {
-            printf("[INFO] Type: %s, Token: %lf\n", plc_token_type_as_cstr(token.type), token.data.number);
+            printf("[INFO] Type: %s, Token: %.2lf\n", plc_token_type_as_cstr(token.type), token.data.number);
         } break;
 
         case PLC_TOKEN_STRING:
@@ -108,12 +108,33 @@ bool plc_free_tokens(Plc_Tokens *tokens)
     return true;
 }
 
+int plc_repl(void)
+{
+    char code[256] = {0};
+    Plc_Tokens tokens = {0};
+    Plc_Tokens stack = {0};
+
+    fprintf(stdout, "repl> ");
+    while (fgets(code, 256, stdin)) {
+        Plc_Lexer lexer = plc_lexer_init(code, strlen(code));
+
+        if (!plc_lexer_tokenize(&lexer, &tokens)) break;
+        if (!plc_parse_tokens(&tokens, &stack)) break;
+
+        stack.count = 0;
+        tokens.count = 0;
+
+        fprintf(stdout, "repl> ");
+    }
+    return 0;
+}
+
 int main(int argc, char **argv)
 {
     const char *program = plc_shift_args(&argc, &argv);
     if (argc <= 0) {
-        fprintf(stderr, "USAGE: %s <input_file>\n", program);
-        return 1;
+        fprintf(stdout, "%s Interpreter\n", program);
+        return plc_repl();
     }
 
     const char *file_path = plc_shift_args(&argc, &argv);
